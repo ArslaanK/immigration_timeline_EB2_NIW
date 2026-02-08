@@ -11,8 +11,8 @@ st.title("EB2 NIW Green Card Timeline Simulator")
 # --------------------------------------------------
 st.header("Visa Bulletin Setup")
 st.markdown("Get current dates from: https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html")
+
 country = st.selectbox("Country of Chargeability (EB-2)", ["Rest of World", "China", "India"])
-st.subheader(f"EB-2 {country} Visa Bulletin Dates")
 filing_cutoff = st.date_input("Date for Filing (I-485 eligibility)", value=date(2024,4,1))
 final_cutoff = st.date_input("Final Action Date (Green Card approval)", value=date(2024, 10,1))
 
@@ -20,9 +20,9 @@ final_cutoff = st.date_input("Final Action Date (Green Card approval)", value=da
 # USER INPUTS: NIW & I-140
 # --------------------------------------------------
 st.header("1️⃣ NIW Preparation")
-niw_start = st.date_input("NIW Preparation Start Date", value=date(2026,2,1))
-letters_months = st.number_input("Recommendation Letters Preparation", 0.0, 3.0, 1.0)
-petition_months = st.number_input("I-140 Petition Drafting", 0.0, 2.0, 1.0)
+niw_start = st.date_input("NIW Preparation Start Date ", value=date(2026,2,1))
+letters_months = st.number_input("Recommendation Letters Preparation (months)", 0.0, 3.0, 1.0)
+petition_months = st.number_input("I-140 Petition Drafting (months)", 0.0, 2.0, 1.0)
 
 # I-140 filing by user
 st.header("2️⃣ I-140 Filing & Approval")
@@ -32,8 +32,8 @@ premium = st.checkbox("Premium Processing (15 days)")
 
 rfe_toggle = st.checkbox("I-140 RFE Issued?")
 if rfe_toggle:
-    rfe_response_months = st.number_input("RFE Response Preparation Time", 0.0, 12.0, 2.0)
-    rfe_review_months = st.number_input("USCIS Review After RFE", 0.0, 12.0, 3.0)
+    rfe_response_months = st.number_input("RFE Response Preparation Time (months)", 0.0, 12.0, 2.0)
+    rfe_review_months = st.number_input("USCIS Review After RFE (months)", 0.0, 12.0, 3.0)
 else:
     rfe_response_months = 0.0
     rfe_review_months = 0.0
@@ -42,8 +42,8 @@ else:
 # USER INPUTS: Adjustment of Status
 # --------------------------------------------------
 st.header("3️⃣ Adjustment of Status")
-i485_processing_months = st.number_input("I-485 Processing Time", 6.0, 22.0, 8.0)
-ead_months = st.number_input("EAD/AP Processing Time", 1.0, 12.0, 4.0)
+i485_processing_months = st.number_input("I-485 Processing Time (months)", 6.0, 22.0, 8.0)
+ead_months = st.number_input("EAD/AP Processing Time (months)", 1.0, 12.0, 4.0)
 
 # --------------------------------------------------
 # CALCULATIONS
