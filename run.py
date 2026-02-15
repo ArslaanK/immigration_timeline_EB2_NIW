@@ -1,39 +1,164 @@
+import plotly.express as px
 import streamlit as st
 import pandas as pd
-from datetime import date, timedelta
-import plotly.express as px
+from datetime import date, timedelta, datetime
+from bs4 import BeautifulSoup
+import requests
+from io import StringIO
+
+
+# --------------------------------------------------
+# Helpers
+# --------------------------------------------------
+
+def get_latest_visa_bulletin_url():
+    base = "https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin"
+    today = date.today()
+
+    for i in [1, 0]:
+        target = today.replace(day=1) + timedelta(days=32 * i)
+
+        month_name = target.strftime("%B").lower()
+        year = target.year
+
+        url = f"{base}/{year}/visa-bulletin-for-{month_name}-{year}.html"
+        r = requests.get(url)
+
+        if r.status_code == 200:
+            return url, month_name.capitalize(), year
+
+    return None, None, None
+
+
+def parse_visa_date(val):
+
+    if pd.isna(val):
+        return None
+
+    # already date/datetime
+    if isinstance(val, (datetime, pd.Timestamp)):
+        return val.date()
+
+    if isinstance(val, date):
+        return val
+
+    val = str(val).strip()
+
+    if val == "C":
+        return date.today()
+
+    if val == "U":
+        return None
+
+    return datetime.strptime(val, "%d%b%y").date()
+
+
+def normalize_df(df):
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.replace("\xa0", "", regex=False)
+        .str.upper()
+    )
+
+    df.index = (
+        df.index.astype(str)
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.replace("\xa0", "", regex=False)
+        .str.upper()
+    )
+
+    return df
+
+
+# --------------------------------------------------
+# Scraper
+# --------------------------------------------------
+
+def scrape_visa_bulletin(url, country, eb_type):
+
+    response = requests.get(url)
+    tables = pd.read_html(StringIO(response.text))
+
+    employment_tables = []
+
+    for table in tables:
+        if len(table) > 2:
+            first_row = table.iloc[0].astype(str)
+            if first_row.str.contains("Employment", case=False, na=False).any():
+                employment_tables.append(table)
+
+    if len(employment_tables) < 2:
+        st.error("Employment tables not found")
+        return None, None
+
+    action_df = employment_tables[1]
+    filing_df = employment_tables[0]
+
+    action_df.columns = action_df.iloc[0]
+    filing_df.columns = filing_df.iloc[0]
+
+    action_df = action_df.iloc[1:].set_index(action_df.columns[0])
+    filing_df = filing_df.iloc[1:].set_index(filing_df.columns[0])
+
+    action_df = normalize_df(action_df)
+    filing_df = normalize_df(filing_df)
+
+    country_dict = {
+        "Rest of World": "ALL CHARGEABILITY AREAS EXCEPT THOSE LISTED",
+        "CHINA": "CHINA- MAINLAND BORN",
+        "INDIA": "INDIA",
+        "MEXICO": "MEXICO",
+        "PHILIPPINES": "PHILIPPINES",
+    }
+
+    eb_dict = {
+        "EB-1": "1ST",
+        "EB-2": "2ND",
+        "EB-3": "3RD"
+    }
+
+    country_id = country_dict[country].upper()
+    eb_id = eb_dict[eb_type]
+
+    try:
+        f_date = parse_visa_date(filing_df.loc[eb_id, country_id])
+        a_date = parse_visa_date(action_df.loc[eb_id, country_id])
+    except KeyError:
+        st.error("Column mismatch after normalization")
+        st.write(filing_df.columns)
+        st.write(filing_df.index)
+        return None, None
+
+    return f_date, a_date
+
+
+# --------------------------------------------------
+# UI
+# --------------------------------------------------
 
 st.set_page_config(page_title="EB2 NIW Green Card Timeline", layout="wide")
 st.title("EB2 NIW Green Card Timeline Simulator")
 
-# --------------------------------------------------
-# USER INPUT: Country & Visa Bulletin Dates
-# --------------------------------------------------
-st.header("Visa Bulletin Setup")
-st.markdown("Get current dates from: https://travel.state.gov/content/travel/en/legal/visa-law0/visa-bulletin.html")
 
-country = st.selectbox("Country of Chargeability (EB-2)", ["Rest of World", "China", "India"])
-filing_cutoff = st.date_input("Date for Filing (I-485 eligibility)", value=date(2024,4,1))
-final_cutoff = st.date_input("Final Action Date (Green Card approval)", value=date(2024, 10,1))
 
 # --------------------------------------------------
 # USER INPUTS: NIW & I-140
 # --------------------------------------------------
-st.header("1️⃣ NIW Preparation")
+st.header("NIW Preparation")
 niw_start = st.date_input("NIW Preparation Start Date ", value=date(2026,2,1))
-letters_months = st.number_input("Recommendation Letters Preparation (months)", 0.0, 3.0, 1.0)
+letters_months = st.number_input("Recommendation Letters Preparation (months)", 0.0, 3.0, 2.0)
 petition_months = st.number_input("I-140 Petition Drafting (months)", 0.0, 2.0, 1.0)
+premium = st.checkbox("filling premium?")
 
-# I-140 filing by user
-st.header("2️⃣ I-140 Filing & Approval")
-i140_user_filed = st.date_input("I-140 Filing Date (Priority Date)", value=niw_start + timedelta(days=int((letters_months + petition_months) * 30)))
-i140_approval_months = st.number_input("Expected I-140 Approval Time (months)", 1.0, 24.0, 6.0)
-premium = st.checkbox("Premium Processing (15 days)")
+i140_approval_months = 4
+rfe_toggle = st.checkbox("Expect I-140 RFE?")
 
-rfe_toggle = st.checkbox("I-140 RFE Issued?")
 if rfe_toggle:
-    rfe_response_months = st.number_input("RFE Response Preparation Time (months)", 0.0, 12.0, 2.0)
-    rfe_review_months = st.number_input("USCIS Review After RFE (months)", 0.0, 12.0, 3.0)
+    rfe_response_months = 2.0
+    rfe_review_months = 3.0
 else:
     rfe_response_months = 0.0
     rfe_review_months = 0.0
@@ -41,13 +166,103 @@ else:
 # --------------------------------------------------
 # USER INPUTS: Adjustment of Status
 # --------------------------------------------------
-st.header("3️⃣ Adjustment of Status")
+st.header("Adjustment of Status")
 i485_processing_months = st.number_input("I-485 Processing Time (months)", 6.0, 22.0, 8.0)
 ead_months = st.number_input("EAD/AP Processing Time (months)", 1.0, 12.0, 4.0)
 
+
 # --------------------------------------------------
-# CALCULATIONS
+# USER INPUTS: Adjustment of Status
 # --------------------------------------------------
+st.header("VISA CLASS")
+country = st.selectbox(
+    "Country of Chargeability",
+    ["Rest of World", "CHINA", "INDIA", "MEXICO", "PHILIPPINES"]
+)
+
+eb_type = st.selectbox(
+    "Preference",
+    ["EB-1", "EB-2", "EB-3"],
+    index=["EB-1", "EB-2", "EB-3"].index("EB-2")
+)
+
+
+i140_user_filed = st.date_input("I-140 Priority Date", value=date.today())
+
+
+if "filing_cutoff" not in st.session_state:
+    st.session_state.filing_cutoff = None
+    st.session_state.final_cutoff = None
+
+url, bulletin_month, bulletin_year = get_latest_visa_bulletin_url()
+
+#if st.button("Fetch Latest Visa Bulletin Dates"):
+
+if url:
+    st.info(f"Using Visa Bulletin: {bulletin_month} {bulletin_year}")
+
+    f, a = scrape_visa_bulletin(url, country, eb_type)
+
+    st.session_state.filing_cutoff = a
+    st.session_state.final_cutoff = f
+
+    #st.success("Visa Bulletin Retrieved")
+
+st.write("📌 USCIS Filing Date:", st.session_state.filing_cutoff)
+st.write("📌 USCIS Final Action Date:", st.session_state.final_cutoff)
+
+
+# --------------------------------------------------
+# Priority Date Check
+# --------------------------------------------------
+
+
+filing_cutoff = st.session_state.filing_cutoff
+final_cutoff = st.session_state.final_cutoff
+
+if filing_cutoff:
+
+    if i140_user_filed > filing_cutoff:
+        backlog_days = (i140_user_filed - filing_cutoff).days
+        backlog_days_decision = (i140_user_filed - final_cutoff).days
+        
+        reg_i140_decision = i140_user_filed + timedelta(days=8*30)
+        prem_i140_decision = i140_user_filed + timedelta(days=45)
+        st.write("Average processing time: 8 months or 45 days with premium processing")
+        st.write(f"📌 Expected I-140 decision [regular]: {reg_i140_decision}")
+        st.write(f"📌 Expected I-140 decision [premium]: {prem_i140_decision}")
+        st.write(f"📌 Change of Status in Backlog [Filling]: {backlog_days/30:.1f} months")
+        st.write(f"📌 Change of Status in Backlog [Decision]: {backlog_days_decision/30:.1f} months")
+        st.warning("Change of Status cannot be submitted.")
+        st.warning(f"Change of Status can be filed on {date.today()+timedelta(days=backlog_days_decision)}")
+        
+        green_card_decision = date.today() +  timedelta(days=backlog_days) + timedelta(days=8*30)
+        
+        #st.warning(f"Expect green card: {green_card_decision}")
+        
+        
+        
+    else:
+        st.success("Priority Date is current for filing.")
+        backlog_days = (i140_user_filed - filing_cutoff).days
+        backlog_days_decision = (i140_user_filed - final_cutoff).days
+        reg_i140_decision = i140_user_filed + timedelta(days=8*30)
+        prem_i140_decision = i140_user_filed + timedelta(days=45)
+        st.write(f"📌 Expected I-140 decision [regular]: {reg_i140_decision}")
+        st.write(f"📌 Expected I-140 decision [premium]: {prem_i140_decision}")
+        st.write(f"📌 Change of Status in Backlog [Filling]: {backlog_days/30:.1f} months")
+        st.write(f"📌 Change of Status in Backlog [Decision]: {backlog_days_decision/30:.1f} months")
+        
+        st.success("Change of Status can be submitted.")
+        st.success(f"Change of Status can be filed on {date.today()+timedelta(days=backlog_days_decision)}")
+        
+        green_card_decision = final_cutoff +  timedelta(days=backlog_days) + timedelta(days=8*30)
+        
+        #st.warning(f"Expect green card: {green_card_decision}")
+        
+# -------------------------
+# CALCULATIONS (Corrected for Backlog)
+# -------------------------
 if niw_start:
 
     # Convert months to days
@@ -59,17 +274,20 @@ if niw_start:
     i485_days = int(i485_processing_months * 30)
     ead_days = int(ead_months * 30)
 
-    # Preparation Phase
+    # -------------------------
+    # NIW Preparation Phase
+    # -------------------------
     letters_done = niw_start + timedelta(days=letters_days)
     petition_ready = letters_done + timedelta(days=petition_days)
 
-    # I-140 Filing and Priority Date
+    # -------------------------
+    # I-140 Filing and Approval
+    # -------------------------
     i140_filed = i140_user_filed
     priority_date = i140_filed
 
-    # I-140 Approval
     if premium:
-        i140_approved = i140_filed + timedelta(days=15)
+        i140_approved = i140_filed + timedelta(days=45)
     else:
         i140_approved = i140_filed + timedelta(days=i140_days)
 
@@ -79,24 +297,20 @@ if niw_start:
         i140_approved = rfe_response + timedelta(days=rfe_review_days)
 
     # -------------------------
-    # I-485 Filing Eligibility
+    # Backlog Calculations
     # -------------------------
-    if priority_date <= filing_cutoff:
-        i485_eligible_date = i140_approved
-    else:
-        backlog_wait_days = (priority_date - filing_cutoff).days
-        i485_eligible_date = i140_approved + timedelta(days=backlog_wait_days)
+    backlog_filing_days = max(0, (priority_date - filing_cutoff).days)
+    backlog_final_days = max(0, (priority_date - final_cutoff).days)
 
     # -------------------------
-    # Final Action Eligibility
+    # I-485 Eligibility (cannot file before backlog clears)
     # -------------------------
-    if priority_date <= final_cutoff:
-        final_action_date = i485_eligible_date
-    else:
-        backlog_wait_days_final = (priority_date - final_cutoff).days
-        final_action_date = i485_eligible_date + timedelta(days=backlog_wait_days_final)
+    i485_eligible_date = i140_approved + timedelta(days=backlog_filing_days)
 
-    # EAD + Green Card
+    # -------------------------
+    # Final Action / Green Card
+    # -------------------------
+    final_action_date = i485_eligible_date + timedelta(days=backlog_final_days)
     ead_received = i485_eligible_date + timedelta(days=ead_days)
     gc_received = final_action_date + timedelta(days=i485_days)
 
@@ -116,9 +330,10 @@ if niw_start:
     df = pd.DataFrame(milestones, columns=["Milestone", "Date"])
     st.header("📅 Key Milestones")
     st.dataframe(df)
-    
+
+
     # -------------------------
-    # Timeline Chart with Colors
+    # Timeline Chart
     # -------------------------
     timeline_data = [
         ("Preparation Phase", niw_start, petition_ready),
@@ -127,10 +342,8 @@ if niw_start:
         ("I-485 Pending", i485_eligible_date, gc_received),
         ("Green Card Received", gc_received, gc_received + timedelta(days=15)),
     ]
-    
     timeline_df = pd.DataFrame(timeline_data, columns=["Stage", "Start", "End"])
-    
-    # Define custom colors
+
     color_map = {
         "Preparation Phase": "blue",
         "I-140 Pending": "orange",
@@ -138,7 +351,7 @@ if niw_start:
         "I-485 Pending": "orange",
         "Green Card Received": "green"
     }
-    
+
     st.header("📊 Case Timeline")
     fig = px.timeline(
         timeline_df,
@@ -150,19 +363,8 @@ if niw_start:
     )
     fig.update_yaxes(autorange="reversed")
     fig.update_layout(showlegend=True)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)  
 
 
-    # -------------------------
-    # Summary
-    # -------------------------
-    total_days = (gc_received - niw_start).days
-    total_years = round(total_days / 365, 2)
-    st.success(f"Estimated Total Time to Green Card: {total_days} days (~{total_years} years)")
-    st.info(
-        f"Visa Bulletin Used for {country}:\n"
-        f"Date for Filing: {filing_cutoff}\n"
-        f"Final Action: {final_cutoff}\n"
-        f"I-140 Filing Date: {i140_filed}\n"
-        f"Expected I-140 Approval: {i140_approved}"
-    )
+
+
