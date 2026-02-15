@@ -250,8 +250,8 @@ if filing_cutoff:
         prem_i140_decision = i140_user_filed + timedelta(days=45)
         st.write(f"📌 Expected I-140 decision [regular]: {reg_i140_decision}")
         st.write(f"📌 Expected I-140 decision [premium]: {prem_i140_decision}")
-        st.write(f"📌 Change of Status in Backlog [Filling]: {backlog_days/30:.1f} months")
-        st.write(f"📌 Change of Status in Backlog [Decision]: {backlog_days_decision/30:.1f} months")
+        #st.write(f"📌 Change of Status in Backlog [Filling]: {backlog_days/30:.1f} months")
+        #st.write(f"📌 Change of Status in Backlog [Decision]: {backlog_days_decision/30:.1f} months")
         
         st.success("Change of Status can be submitted.")
         st.success(f"Change of Status can be filed on {date.today()+timedelta(days=backlog_days_decision)}")
@@ -318,7 +318,7 @@ if niw_start:
     # Milestones Table
     # -------------------------
     milestones = [
-        ("NIW Preparation Started", niw_start),
+        ("Preparation Started", niw_start),
         ("Letters Completed", letters_done),
         ("I-140 Filed (Priority Date)", priority_date),
         ("I-140 Approved", i140_approved),
