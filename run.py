@@ -340,6 +340,7 @@ if niw_start:
         ("I-140 Pending", i140_filed, i140_approved),
         ("Backlog Wait", i140_approved, i485_eligible_date),
         ("I-485 Pending", i485_eligible_date, gc_received),
+        ("EAD/AP card", i485_eligible_date, ead_received),
         ("Green Card Received", gc_received, gc_received + timedelta(days=15)),
     ]
     timeline_df = pd.DataFrame(timeline_data, columns=["Stage", "Start", "End"])
@@ -349,6 +350,7 @@ if niw_start:
         "I-140 Pending": "orange",
         "Backlog Wait": "salmon",
         "I-485 Pending": "orange",
+        "EAD/AP card": "cyan",
         "Green Card Received": "green"
     }
 
