@@ -1,4 +1,6 @@
-streamlit
-plotly
-pandas
-beautifulsoup4
+streamlit>=1.25.0
+pandas>=2.0.0
+plotly>=5.15.0
+beautifulsoup4>=4.12.2
+requests>=2.31.0
+lxml>=4.9.3
