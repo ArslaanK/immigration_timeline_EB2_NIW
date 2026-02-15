@@ -139,17 +139,17 @@ def scrape_visa_bulletin(url, country, eb_type):
 # UI
 # --------------------------------------------------
 
-st.set_page_config(page_title="EB2 NIW Green Card Timeline", layout="wide")
-st.title("EB2 NIW Green Card Timeline Simulator")
+st.set_page_config(page_title="Green Card Timeline", layout="wide")
+st.title("Green Card Timeline Simulator")
 
 
 
 # --------------------------------------------------
 # USER INPUTS: NIW & I-140
 # --------------------------------------------------
-st.header("NIW Preparation")
-niw_start = st.date_input("NIW Preparation Start Date ", value=date(2026,2,1))
-letters_months = st.number_input("Recommendation Letters Preparation (months)", 0.0, 3.0, 2.0)
+st.header("Case Preparation")
+niw_start = st.date_input("Case Preparation Start Date ", value=date(2026,2,1))
+letters_months = st.number_input("Recommendation Letters Preparation (months) [if applicable]", 0.0, 3.0, 0.0)
 petition_months = st.number_input("I-140 Petition Drafting (months)", 0.0, 2.0, 1.0)
 premium = st.checkbox("filling premium?")
 
