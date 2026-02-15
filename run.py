@@ -151,7 +151,7 @@ st.header("Case Preparation")
 niw_start = st.date_input("Case Preparation Start Date ", value=date(2026,2,1))
 letters_months = st.number_input("Recommendation Letters Preparation (months) [if applicable]", 0.0, 3.0, 0.0)
 petition_months = st.number_input("I-140 Petition Drafting (months)", 0.0, 2.0, 1.0)
-premium = st.checkbox("filling premium?")
+premium = st.checkbox("Filling Premium?")
 
 i140_approval_months = 4
 rfe_toggle = st.checkbox("Expect I-140 RFE?")
